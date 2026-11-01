@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>THE XENAKIS MACHINE v0.1</title>
+<style>
+:root{color-scheme:dark;--ink:#e9edf7;--muted:#9ea9bb;--line:#30394b;--panel:#141925;--gold:#d9b674;--cyan:#8dd8e6}
+*{box-sizing:border-box}body{margin:0;background:#090b11;color:var(--ink);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:1040px;padding:24px;margin:auto}header{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap}h1{font-size:clamp(1.5rem,4vw,2.45rem);letter-spacing:.13em;margin:0}.sub{color:var(--muted);font-size:.82rem;letter-spacing:.08em}.credit{color:var(--gold);font-size:.82rem}.intro{max-width:850px;color:#c4cbd7;margin:18px 0 12px}.intro strong{color:#f1d49c;font-weight:650}.visual{height:430px;position:relative;overflow:hidden;border:1px solid #323b4b;border-radius:18px;background:radial-gradient(ellipse at 50% 52%,#1a2638,#0b0e16 72%);box-shadow:inset 0 0 70px #03050a;margin:18px 0 12px}.visual canvas{width:100%;height:100%;display:block}.legend{position:absolute;inset:auto 18px 14px;display:flex;justify-content:space-between;color:#aab5c6;font:11px ui-monospace,SFMono-Regular,monospace;pointer-events:none}.description{color:#aab4c4;font-size:.9rem;margin:0 2px 20px;max-width:900px}.description em{color:#d9c18f;font-style:normal}.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0}.actions button{border:0;border-radius:9px;padding:11px 20px;font-weight:800;letter-spacing:.04em;background:#e1c27f;color:#15130f;cursor:pointer}.actions button.stop{background:#293242;color:#e4eaf3}.actions button:disabled{opacity:.5;cursor:default}.status{color:#bdc8d8;font-size:.9rem}.panel{background:var(--panel);border:1px solid #30394b;border-radius:15px;padding:18px}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 28px}.control label{display:flex;justify-content:space-between;gap:8px;margin-bottom:9px}.control output{color:var(--gold);font-variant-numeric:tabular-nums}.control input{width:100%;accent-color:#e0c17f}.note{font-size:.8rem;color:#929db0;margin:14px 2px 0}footer{color:#707c91;font-size:.76rem;margin:17px 2px 5px}@media(max-width:620px){.wrap{padding:16px}.controls{grid-template-columns:1fr}.visual{height:350px}.credit{width:100%}}
+</style></head>
+<body><main class="wrap">
+<header><div><h1>THE XENAKIS MACHINE</h1><div class="sub">v0.1 · STOCHASTIC SOUND LANDSCAPE</div></div><div class="credit">Een klankexperiment van Kris &amp; Omnia</div></header>
+<p class="intro"><strong>Stel je een orkest voor dat geen partituur volgt, maar een sterrenstorm.</strong> Elke toon verschijnt uit een kans: honderden kleine bewegingen groeien samen tot een klankwolk, waaieren uit en vallen soms heel even samen. De machine tekent wat ze componeert.</p>
+<section class="visual" aria-label="Bewegend beeld van de gegenereerde klank"><canvas id="viz"></canvas><div class="legend"><span id="phase">STILTE · WACHTEND</span><span id="readout">KANSVELD —</span></div></section>
+<p class="description"><em>Beeldbeschrijving:</em> lichtende lijnen trekken door een donker veld als zwermen deeltjes. Soms bewegen ze haast ordelijk in één richting; dan breekt de vorm open in glissandi en klankclusters. De muziek is nooit vooraf vastgelegd: ze ontstaat uit waarschijnlijkheden, en elke uitvoering bouwt haar eigen storm.</p>
+<div class="actions"><button id="start">▶ START DE STORM</button><button id="stop" class="stop" disabled>■ STILTE</button><span id="status" class="status">Klaar om te ontstaan</span></div>
+<section class="panel"><div class="controls">
+<div class="control"><label for="chaos">Turbulentie <output id="chaosOut">58%</output></label><input id="chaos" type="range" min="0" max="100" value="58"></div>
+<div class="control"><label for="density">Klankdichtheid <output id="densityOut">48%</output></label><input id="density" type="range" min="0" max="100" value="48"></div>
+<div class="control"><label for="glide">Glijbeweging <output id="glideOut">62%</output></label><input id="glide" type="range" min="0" max="100" value="62"></div>
+<div class="control"><label for="space">Ruimte / galm <output id="spaceOut">55%</output></label><input id="space" type="range" min="0" max="100" value="55"></div>
+</div><p class="note">Elke start maakt een nieuwe compositie. Zet de dichtheid laag voor losse, verre tonen of hoog voor een dichte geluidswolk. Werkt lokaal in je browser; geen samples of internet nodig.</p></section>
+<footer>Vrij geïnspireerd door Iannis Xenakis en zijn onderzoek naar kans, massa en muzikale beweging. Geen reconstructie van een bestaand werk.</footer>
+</main>
+<script>
+(()=>{'use strict';const $=id=>document.getElementById(id);const canvas=$('viz'),g=canvas.getContext('2d');let W=0,H=0,dpr=1,ctx=null,master=null,wet=null,convolver=null,active=false,timer=0,startedAt=0,clouds=[],particles=[],energy=0,frame=0;
+const settings={chaos:.58,density:.48,glide:.62,space:.55};
+function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);g.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',resize);resize();
+function impulse(){const len=Math.floor(ctx.sampleRate*3.4),b=ctx.createBuffer(2,len,ctx.sampleRate);for(let c=0;c<2;c++){const a=b.getChannelData(c);for(let i=0;i<len;i++)a[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.7)}return b}
+function setupAudio(){ctx=new(window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();master.gain.value=.52;const comp=ctx.createDynamicsCompressor();comp.threshold.value=-19;comp.knee.value=20;comp.ratio.value=3;master.connect(comp);comp.connect(ctx.destination);convolver=ctx.createConvolver();convolver.buffer=impulse();wet=ctx.createGain();wet.gain.value=.28;convolver.connect(wet);wet.gain.value=.04+settings.space*.55;wet.connect(master);}
+function hz(m){return 440*Math.pow(2,(m-69)/12)}
+function pick(a){return a[Math.floor(Math.random()*a.length)]}
+function spawnVoice(){if(!active||!ctx)return;const now=ctx.currentTime,chaos=settings.chaos,density=settings.density,glide=settings.glide;
+ const scale=[0,1,3,6,7,10],base=34+Math.floor(Math.random()*27),root=base+pick(scale),count=1+Math.floor(Math.random()*(2+density*13));
+ for(let i=0;i<count;i++){const delay=Math.random()*(.12+density*.42),t=now+delay,duration=.45+Math.random()*(1.6+density*3.8),m=root+pick([-12,-7,-5,0,0,2,5,7,12,19])+Math.round((Math.random()-.5)*chaos*14),f=hz(Math.max(24,Math.min(88,m))),o=ctx.createOscillator(),filter=ctx.createBiquadFilter(),amp=ctx.createGain(),pan=ctx.createStereoPanner();
+ o.type=pick(['sine','triangle','sawtooth']);o.frequency.setValueAtTime(f*(.985+Math.random()*.03),t);const target=f*Math.pow(2,(Math.random()-.5)*glide*1.8);o.frequency.exponentialRampToValueAtTime(Math.max(20,target),t+duration*(.45+Math.random()*.45));
+ filter.type='lowpass';filter.Q.value=.6+Math.random()*3;filter.frequency.setValueAtTime(450+Math.random()*2100,t);filter.frequency.exponentialRampToValueAtTime(350+Math.random()*2600,t+duration*.55);
+ const peak=(.008+Math.random()*.035)*(1-density*.35);amp.gain.setValueAtTime(.0001,t);amp.gain.linearRampToValueAtTime(peak,t+.025+Math.random()*.3);amp.gain.setValueAtTime(peak,t+duration*.55);amp.gain.exponentialRampToValueAtTime(.0001,t+duration);
+ pan.pan.value=(Math.random()*2-1)*(0.3+chaos*.7);o.connect(filter);filter.connect(amp);amp.connect(pan);pan.connect(master);pan.connect(convolver);o.start(t);o.stop(t+duration+.03);
+ const angle=Math.random()*Math.PI*2,r=.12+Math.random()*.42;particles.push({x:.5+Math.cos(angle)*r,y:.5+Math.sin(angle)*r,dx:(Math.random()-.5)*(.1+glide*.9),dy:(Math.random()-.5)*(.1+chaos),life:1,decay:.0015+Math.random()*.006,hue:185+Math.random()*68,size:.7+Math.random()*2.6});energy=Math.min(1,energy+peak*11);
+ }
+ const interval=110+Math.random()*(420-density*220);timer=setTimeout(spawnVoice,interval);}
+function start(){if(active)return;if(!ctx)setupAudio();ctx.resume();active=true;startedAt=performance.now();$('start').disabled=true;$('stop').disabled=false;$('status').textContent='De kansen beginnen samen te klinken';$('phase').textContent='GELUIDSWOLK · IN BEWEGING';spawnVoice()}
+function stop(){active=false;clearTimeout(timer);if(ctx){master.gain.cancelScheduledValues(ctx.currentTime);master.gain.setTargetAtTime(.0001,ctx.currentTime,.16);setTimeout(()=>{if(ctx&&!active){ctx.close();ctx=null;master=null;wet=null;convolver=null}},1400)}$('start').disabled=false;$('stop').disabled=true;$('status').textContent='De storm lost op in stilte';$('phase').textContent='STILTE · WACHTEND'}
+$('start').onclick=start;$('stop').onclick=stop;
+for(const [id,key] of [['chaos','chaos'],['density','density'],['glide','glide'],['space','space']])$(id).addEventListener('input',e=>{settings[key]=+e.target.value/100;$(id+'Out').textContent=e.target.value+'%';if(key==='space'&&wet&&ctx)wet.gain.setTargetAtTime(.04+settings.space*.55,ctx.currentTime,.12)});
+function draw(){requestAnimationFrame(draw);frame++;g.clearRect(0,0,W,H);g.fillStyle='rgba(7,10,17,.20)';g.fillRect(0,0,W,H);const t=performance.now()/1000,chaos=settings.chaos;
+ // Slowly breathing central probability field
+ const cx=W*.5+Math.sin(t*.17)*W*.035,cy=H*.48+Math.cos(t*.13)*H*.045,r=Math.min(W,H)*(.12+settings.density*.1+Math.sin(t*.5)*.012);
+ const grad=g.createRadialGradient(cx,cy,2,cx,cy,r*2.2);grad.addColorStop(0,`rgba(70,136,164,${.08+energy*.13})`);grad.addColorStop(.55,'rgba(32,67,93,.07)');grad.addColorStop(1,'rgba(8,12,20,0)');g.fillStyle=grad;g.fillRect(0,0,W,H);
+ // A field of stochastic trajectories, each line is a small probability path.
+ const lines=55;for(let i=0;i<lines;i++){const seed=i*12.9898,tick=Math.floor(t*.24),phase=(seed+tick*2.7)%100/100;const x0=W*(.12+((i*37)%83)/100),y0=H*(.15+((i*61)%70)/100);const bend=Math.sin(t*.28+i*1.71)*(.04+chaos*.22),sweep=Math.cos(t*.19+i*.91)*(.035+settings.glide*.1);g.beginPath();g.moveTo(x0,y0);g.bezierCurveTo(x0+W*bend,y0-H*sweep,cx+(x0-cx)*.35+Math.sin(t+i)*W*.07,cy+(y0-cy)*.35,x0+W*bend*.3+Math.sin(t*.33+i)*W*.045,y0+H*sweep*.4);g.strokeStyle=`hsla(${190+((i*11+frame*.15)%60)},75%,${55+phase*18}%,${.035+phase*.06})`;g.lineWidth=.45+phase*.7;g.stroke()}
+ particles=particles.filter(p=>p.life>0);for(const p of particles){p.x+=p.dx*.0016;p.y+=p.dy*.0016;p.life-=p.decay;const x=p.x*W,y=p.y*H;g.beginPath();g.arc(x,y,p.size*(.5+p.life),0,Math.PI*2);g.fillStyle=`hsla(${p.hue},85%,72%,${Math.max(0,p.life*.65)})`;g.fill();g.beginPath();g.moveTo(x,y);g.lineTo(x-p.dx*8,y-p.dy*8);g.strokeStyle=`hsla(${p.hue},80%,69%,${Math.max(0,p.life*.32)})`;g.lineWidth=.8;g.stroke()}
+ energy*=.975;if(active&&frame%24===0){$('readout').textContent=`KANSVELD ${Math.round((.3+Math.random()*.7)*100)}% · ${Math.max(1,particles.length)} DEELTJES`}
+ if(active&&performance.now()-startedAt>1000)$('status').textContent=energy>.18?'Klankmassa groeit en verschuift':'Losse tonen bewegen door het veld';}
+requestAnimationFrame(draw);
+})();
+</script></body></html>
