@@ -145,7 +145,18 @@ function padPlay(i){if(!ctx||!$('padEnable').checked)return;
  let lfo=null;if($('padLfoOn').checked){lfo=ctx.createOscillator();const depth=ctx.createGain();lfo.type='sine';lfo.frequency.value=+$('padLfoRate').value;depth.gain.value=+$('padCutoff').value*(+$('padLfoDepth').value/100)*.65;lfo.connect(depth);depth.connect(f.frequency);lfo.start(now)}
  padVoices.add({osc,g,lfo,ended:false});document.querySelectorAll('.padchord').forEach(el=>el.classList.toggle('playing',+el.dataset.padstep===i));
 }
-function padSchedule(transportStep,when){if(!$('padEnable').checked)return;const measureSteps=16*(+$('padBars').value);if(transportStep%measureSteps!==0)return;const i=Math.floor(transportStep/measureSteps)%4;const id=setTimeout(()=>{padTimers.delete(id);if(running)padPlay(i)},Math.max(0,(when-ctx.currentTime)*1000));padTimers.add(id)}
+function padSchedule(transportStep,when){
+ if(!$('padEnable').checked)return;
+ const measureSteps=16*(+$('padBars').value);
+ // AUTO chord changes restart at every section boundary. The old absolute
+ // transport counter could select the wrong chord after a 4/6/12-bar section.
+ const auto=machineMode==='auto';
+ const section=auto?songPosition(Math.floor(transportStep/16)):null;
+ const localStep=auto?section.local*16+transportStep%16:transportStep;
+ if(localStep%measureSteps!==0)return;
+ const i=Math.floor(localStep/measureSteps)%4;
+ const id=setTimeout(()=>{padTimers.delete(id);if(running)padPlay(i)},Math.max(0,(when-ctx.currentTime)*1000));padTimers.add(id);
+}
 function padStopAll(){padTimers.forEach(clearTimeout);padTimers.clear();if(ctx)for(const v of [...padVoices])padStopVoice(v,ctx.currentTime);document.querySelectorAll('.padchord.playing').forEach(el=>el.classList.remove('playing'))}
 $('padEnable').addEventListener('change',()=>{if(!$('padEnable').checked)padStopAll()});
 [['padVolume','%',100,0],['padCutoff',' Hz',1,0],['padAttack',' s',1,2],['padRelease',' s',1,1],['padLfoRate',' Hz',1,2],['padLfoDepth','%',1,0]].forEach(([id,unit,mult,places])=>$(id).addEventListener('input',()=>$(id+'V').textContent=(+$(id).value*mult).toFixed(places)+unit));
@@ -220,7 +231,9 @@ let rows=drumNames.slice(),patterns=rows.map((r,i)=>Array.from({length:64},(_,j)
 function render(){let len=+$('bars').value*16;const root=$('seqRows');root.innerHTML='';rows.forEach((r,i)=>{if(Math.floor(i/6)!==seqBank)return;let div=document.createElement('div');div.className='seqgrid';let label=document.createElement('span');label.className='rowlabel';label.textContent=drumLabels[i];div.append(label);for(let j=0;j<len;j++){let b=document.createElement('button');b.className='step'+(patterns[i][j]?' on':'');b.dataset.step=j;b.title=`${drumLabels[i]} · stap ${j+1}`;b.onclick=()=>{patterns[i][j]=!patterns[i][j];b.classList.toggle('on',patterns[i][j])};div.append(b)}root.append(div)})}
 document.querySelectorAll('.seqbank').forEach(b=>b.onclick=()=>{seqBank=+b.dataset.bank;document.querySelectorAll('.seqbank').forEach(x=>x.classList.toggle('active',+x.dataset.bank===seqBank));render()});
 $('bars').onchange=render;render();let running=false,timer=null,step=0,nextTime=0;let arpPending=true,arpSubdivision=0;const scheduledArps=new Set();function arpShiftMs(){const bpm=Math.max(50,Math.min(220,+$('bpm').value||120));return (+$('arpShift').value)*((60/bpm)*4/8)*1000;}function scheduleArp(ms){const id=setTimeout(()=>{scheduledArps.delete(id);if(running && $('arpEnable').checked && ([...arpHeld.values(),...arpLatch].length))arpPulse()},Math.max(0,ms));scheduledArps.add(id)}function tick(){if(!running)return;let len=+$('bars').value*16;while(nextTime<ctx.currentTime+.08){const current=step%len;
-scheduleBass(step,nextTime);padSchedule(step,nextTime);if(typeof machineStep==='function')machineStep(step,nextTime);
+// Update song/section harmony first, then schedule bass and pad on that harmony.
+if(typeof machineStep==='function')machineStep(step,nextTime);
+scheduleBass(step,nextTime);padSchedule(step,nextTime);
 if(step%16===0 && arpPending){arpIndex=0;arpStep=0;arpSubdivision=0;arpPending=false;}
 if($('arpEnable').checked && !arpPending && ([...arpHeld.values(),...arpLatch].length)){
  const rate=+$('arpRate').value;const sixteenth=60/Math.max(50,Math.min(220,+$('bpm').value||120))/4;
@@ -396,7 +409,7 @@ $('machineStopAuto').addEventListener('click',()=>{machineSetMode('solo');$('sto
 const machineOriginalOn=noteOn,machineOriginalOff=noteOff;
 noteOn=function(midi,key){if(machineMode==='semi'&&key!=='arpvoice'&&!String(key).startsWith('machine')){machineManualHeld.add(key);machineLastManual=midi;machineKey=((midi%12)+12)%12;machineQuality=[0,2,4,5,7,9,11].includes(machineKey)?'major':'minor';setBassRoot(midi);machineStatus('SEMI-AUTO · Volgt '+['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'][machineKey]+' · speel verder!')}return machineOriginalOn(midi,key)};
 noteOff=function(key,midi){machineManualHeld.delete(key);return machineOriginalOff(key,midi)};
-function machineStep(step,when){if(machineMode==='solo')return;const bar=Math.floor(step/16),pos=step%16;if(pos===0&&bar!==machineBar){machineBar=bar;if(machineMode==='auto'&&bar>0&&bar%4===0){machinePhrase++;if(machinePhrase%2===0){$('padSound').value=['warm','space','strings','dreamscape'][machineRand(4)]}if(machinePhrase%3===0){machineProgression=machineProgressions[machineRand(machineProgressions.length)];for(let i=0;i<4;i++)padRoots[i]=36+machineKey+machineProgression[i];padRender()}if(machinePhrase%2===1){patterns[3]=patterns[3].map((v,i)=>i%16%2===0?Math.random()<.65:v);render()}}}
+function machineStep(step,when){if(machineMode==='solo')return;const bar=Math.floor(step/16),pos=step%16;if(pos===0&&bar!==machineBar){machineBar=bar;if(machineMode==='auto'&&bar>0&&bar%4===0){machinePhrase++;if(machinePhrase%2===0){$('padSound').value=['warm','space','strings','dreamscape'][machineRand(4)]}if(machinePhrase%3===0){/* AUTO harmony is owned by songChangeSection; do not overwrite its chords mid-section. */}if(machinePhrase%2===1){patterns[3]=patterns[3].map((v,i)=>i%16%2===0?Math.random()<.65:v);render()}}}
 const chordDegree=machineMode==='auto'?machineProgression[bar%4]:0;
 const root=machineKey+chordDegree,scale=machineQuality==='minor'?machineScaleMinor:machineScaleMajor;
 if(machineMode==='semi'&&pos===0){for(let i=0;i<4;i++){padRoots[i]=36+machineKey;padQualities[i]=machineQuality}padRender();setBassRoot(60+machineKey)}
@@ -696,7 +709,7 @@ function motifPhrase(section,bar){
  motifPlan.set(id,plan);return plan;
 }
 function motifNote(plan,slot,bar,section){
- const chordIndex=Math.floor(bar/2)%4,root=padRoots[chordIndex];
+ const chordIndex=Math.floor(songPosition(bar).local/2)%4,root=padRoots[chordIndex];
  const third=padQualities[chordIndex]==='minor'?3:4;
  // The melody can touch sevenths and ninths, but cadences return to stable tones.
  const colour=harmonicActive[chordIndex];
@@ -973,7 +986,7 @@ machineStep=function(step,when){
  // Answers start after the opening beat and use a different rhythm from the call.
  const entries=callRhythm.length>=4?[5,11]:[6,12];
  if(!entries.includes(pos))return;
- const chordIndex=Math.floor(bar/2)%4,root=padRoots[chordIndex];
+ const chordIndex=Math.floor(songPosition(bar).local/2)%4,root=padRoots[chordIndex];
  const third=padQualities[chordIndex]==='minor'?3:4;
  // Use the call's melodic contour as material, then resolve on a chord tone.
  const callNotes=callPlan.notes||[0,2,4,2];
@@ -1327,7 +1340,7 @@ bandChooseModel=function(){
  v64StringStyle='violin';
  $('v64Status').textContent='Bas: '+(v64BassStyle==='bassfinger'?'fingerstyle':'picked')+' · strijkers: '+v64StringStyle;
 };
-function v64Chord(bar){const idx=Math.floor(bar/2)%4,root=padRoots[idx],third=padQualities[idx]==='minor'?3:4;return {root,third,notes:[root,root+third,root+7]}}
+function v64Chord(bar){const idx=Math.floor(songPosition(bar).local/2)%4,root=padRoots[idx],third=padQualities[idx]==='minor'?3:4;return {root,third,notes:[root,root+third,root+7]}}
 // v6.4.11: bowed violin phrases span two full 4/4 bars.
 // Each violin note lasts at least half a bar (2 beats), normally a full bar
 // or more. No repeated quarter-note bow attacks.
@@ -1391,7 +1404,7 @@ machineStep=function(step,when){
     const octaveCompensation=-12*Number($('guitarOctave').value);
     const up=(pos===6||pos===10||pos===14);
     const notes=up?sounding.slice().reverse():sounding;
-    const expression=(chorus?.125:bridge?.07:.085);
+    const expression=(chorus?.3125:bridge?.175:.2125); // v6.4.21: strumming 2.5x; solo unchanged
     const spacing=up?.012:.016; // 36–48 ms for four strings
     const strokeDuration=Math.min(beat*(chorus?.65:.85),.65);
     notes.forEach((m,i)=>{
@@ -1463,7 +1476,7 @@ function grooveBassEvent(step){
  if(!intro&&!outro&&section.local%4===3&&grooveBassHash(bar>>2,2,1)<.55)hits.push(14);
  if(!hits.includes(pos))return null;
  const isPickup=pos>=14,offbeat=pos%4!==0;
- const chordIndex=Math.floor(step/(16*(+$('padBars').value)))%4;
+ const chordIndex=Math.floor(section.local/(+$('padBars').value))%4;
  const root=padRoots[chordIndex],third=padQualities[chordIndex]==='minor'?3:4;
  const nextRoot=padRoots[(chordIndex+1)%4];
  const degree=pos===0?0:pos===8?(grooveBassHash(bar>>2,1,0)<.42?7:0):
@@ -1536,4 +1549,6 @@ songChangeSection=function(section){
   if(machineMode==='auto'&&songIdentityPad)$('padSound').value=songIdentityPad;
 };
 
+
+// v6.4.21: section-local pad timing and strumming gain.
 </script></body></html>
