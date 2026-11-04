@@ -1426,7 +1426,7 @@ machineStep=function(step,when){
     const strokeDuration=Math.min(beat*(chorus?.65:.85),.65);
     notes.forEach((m,i)=>{
      const key='v6420strum_'+step+'_'+i;
-     v64Schedule(when+.012+i*spacing,()=>{
+     v64Schedule(when+i*spacing,()=>{
       guitarOn(m+octaveCompensation,key,expression*(.90+.06*i));
       const id=setTimeout(()=>{v64Timers.delete(id);guitarOff(key)},strokeDuration*1000);
       v64Timers.add(id);
