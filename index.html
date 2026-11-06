@@ -3117,25 +3117,25 @@ function visitorTick(now,dt){
  if(race.stage==='chase'){
   const elapsed=(now-race.since)/1000;
   const left=55-r.left,right=innerWidth-55-r.left,top=100-r.top,bottom=innerHeight-65-r.top;
-  const phase=elapsed<4?'run1':elapsed<8?'push1':elapsed<11?'pull1':elapsed<15?'run2':elapsed<19?'push2':elapsed<22?'pull2':elapsed<25?'run3':'exit';
+  const phase=elapsed<5?'run1':elapsed<6.5?'push1':elapsed<12?'run2':elapsed<13.5?'push2':elapsed<19?'run3':elapsed<20.5?'push3':elapsed<27?'run4':elapsed<28.5?'push4':'exit';
   if(race.phase!==phase){race.phase=phase;race.phaseSince=now;
-   if(phase.startsWith('push')||phase.startsWith('pull')){race.fx=Math.max(left+75,Math.min(right-75,(x+visitor.x)/2));race.fy=Math.max(top+30,Math.min(bottom,(y+visitor.y)/2));race.ax=x;race.ay=y;race.bx=visitor.x;race.by=visitor.y;}
-   if(phase==='run1'||phase==='run2'||phase==='run3'){race.loop=[{x:right,y:Math.max(top,Math.min(bottom,visitor.y))},{x:right,y:top},{x:left,y:top},{x:left,y:bottom},{x:right,y:bottom}];race.bi=0;race.ai=0;}
+   if(phase.startsWith('push')){race.fx=Math.max(left+75,Math.min(right-75,(x+visitor.x)/2));race.fy=Math.max(top+30,Math.min(bottom,(y+visitor.y)/2));race.ax=x;race.ay=y;race.bx=visitor.x;race.by=visitor.y;}
+   if(phase.startsWith('run')){race.loop=[{x:right,y:Math.max(top,Math.min(bottom,visitor.y))},{x:right,y:top},{x:left,y:top},{x:left,y:bottom},{x:right,y:bottom}];race.bi=0;race.ai=0;}
    if(phase==='exit'){race.exitFrom={x:visitor.x,y:visitor.y,ax:x,ay:y};race.exitRight=visitor.x>(left+right)/2;}
   }
   jumpLift=0;visitor.lift=0;
-  if(phase==='run1'||phase==='run2'||phase==='run3'){
+  if(phase.startsWith('run')){
    ant.src=walkingImage;black.src=walkingImage;const target=race.loop[race.bi%race.loop.length];if(movePoint(visitor,target.x,target.y,380,dt))race.bi++;
    const own=race.loop[race.ai%race.loop.length],p={x,y,angle};if(Math.hypot(visitor.x-x,visitor.y-y)>48||race.ai<race.bi){if(movePoint(p,own.x,own.y,410,dt))race.ai++;x=p.x;y=p.y;angle=p.angle;}
-  }else if(phase.startsWith('push')||phase.startsWith('pull')){
-   ant.src=idleImage;black.src=idleImage;const age=(now-race.phaseSince)/1000,u=Math.min(1,age/.45),pull=phase.startsWith('pull'),shove=Math.sin(age*4)*(pull?23:14),gap=pull?24+Math.sin(age*5)*3:20;
+  }else if(phase.startsWith('push')){
+   ant.src=idleImage;black.src=idleImage;const age=(now-race.phaseSince)/1000,u=Math.min(1,age/.4),shove=Math.sin(age*10)*10,gap=20;
    x=race.ax+(race.fx-gap+shove-race.ax)*u;y=race.ay+(race.fy-race.ay)*u;
    visitor.x=race.bx+(race.fx+gap+shove-race.bx)*u;visitor.y=race.by+(race.fy-race.by)*u;angle=0;visitor.angle=180;
   }else{
-   ant.src=walkingImage;black.src=walkingImage;const u=Math.min(1,elapsed-25),v=race.exitFrom,exitX=race.exitRight?innerWidth-r.left+100:-r.left-100;
+   ant.src=walkingImage;black.src=walkingImage;const u=Math.min(1,(elapsed-28.5)/1.5),v=race.exitFrom,exitX=race.exitRight?innerWidth-r.left+100:-r.left-100;
    visitor.x=v.x+(exitX-v.x)*u;visitor.y=v.y;visitor.angle=race.exitRight?0:180;
    const ownX=race.exitRight?right:left;x=v.ax+(ownX-v.ax)*u;y=v.ay+(v.y-v.ay)*u;angle=visitor.angle;
-   if(elapsed>=26){visitor=null;jumpLift=0;race.stage='return';race.home=nodes.reduce((best,p,i)=>Math.hypot(p.x-x,p.y-y)<Math.hypot(nodes[best].x-x,nodes[best].y-y)?i:best,0);}
+   if(elapsed>=30){visitor=null;jumpLift=0;race.stage='return';race.home=nodes.reduce((best,p,i)=>Math.hypot(p.x-x,p.y-y)<Math.hypot(nodes[best].x-x,nodes[best].y-y)?i:best,0);}
   }
  }else{
   const dest=nodes[race.home],dx=dest.x-x,dy=dest.y-y,step=160*dt;
