@@ -3261,22 +3261,33 @@ function frame(now){const dt=last?Math.min((now-last)/1000,.05):0;last=now;
  const shell=document.querySelector('.shell');if(!shell)return;
  let pending=0,previousScale=0;
  function fit(){pending=0;
-  const viewport=window.visualViewport;
-  const availableWidth=Math.max(1,(viewport?viewport.width:innerWidth)-12),availableHeight=Math.max(1,(viewport?viewport.height:innerHeight)-12);
+  const vp=window.visualViewport,width=vp?vp.width:innerWidth,height=vp?vp.height:innerHeight;
+  const availableWidth=Math.max(1,width-16),availableHeight=Math.max(1,height-20);
   const logicalWidth=Math.max(1000,Math.min(1600,availableWidth));
-  shell.style.setProperty('--tk-studio-width',logicalWidth+'px');
-  shell.style.setProperty('--tk-studio-scale','1');
-  const rect=shell.getBoundingClientRect(),naturalWidth=Math.max(rect.width,shell.scrollWidth),naturalHeight=Math.max(rect.height,shell.scrollHeight);
-  const scale=Math.min(1,availableWidth/naturalWidth,availableHeight/naturalHeight);
+  shell.style.setProperty('--tk-studio-width',logicalWidth+'px');shell.style.setProperty('--tk-studio-scale','1');
+  const rect=shell.getBoundingClientRect(),pad=document.getElementById('padSection');
+  const naturalWidth=Math.max(rect.width,shell.scrollWidth),naturalHeight=Math.max(rect.height,shell.scrollHeight,pad?pad.getBoundingClientRect().bottom-rect.top+12:0);
+  let scale=Math.min(1,availableWidth/naturalWidth,availableHeight/naturalHeight);
   shell.style.setProperty('--tk-studio-scale',String(scale));
+  // Check actual rendered bounds too: Safari can report zoomed layout metrics differently.
+  for(let pass=0;pass<3;pass++){
+   const box=shell.getBoundingClientRect(),bottom=Math.max(box.bottom,pad?pad.getBoundingClientRect().bottom:box.bottom);
+   const bottomLimit=(vp?vp.offsetTop:0)+height-10,room=Math.max(1,bottomLimit-box.top),actualHeight=bottom-box.top;
+   const widthRatio=availableWidth/Math.max(1,box.width),heightRatio=room/Math.max(1,actualHeight);
+   const correction=Math.min(1,widthRatio,heightRatio);
+   if(correction>=.999)break;scale*=correction*.995;shell.style.setProperty('--tk-studio-scale',String(scale));
+  }
   if(Math.abs(scale-previousScale)>.001){previousScale=scale;window.dispatchEvent(new CustomEvent('tk-studio-fit',{detail:{scale}}));}
  }
- function schedule(){if(!pending)pending=requestAnimationFrame(fit);}
- window.addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);
+ function schedule(){if(!pending)pending=requestAnimationFrame(()=>requestAnimationFrame(fit));}
+ window.addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);window.addEventListener('orientationchange',schedule);
  document.fonts?.ready.then(schedule);
+ const bass=document.getElementById('bassGrid'),pad=document.getElementById('padSection');
+ if(typeof ResizeObserver!=='undefined'){const observer=new ResizeObserver(schedule);observer.observe(shell);if(bass)observer.observe(bass);if(pad)observer.observe(pad);}
+ new MutationObserver(records=>{if(records.some(record=>[...record.addedNodes,...record.removedNodes].some(node=>node.nodeType===1)))schedule();}).observe(shell,{childList:true,subtree:true});
+ document.getElementById('composerSimpleStart')?.addEventListener('click',()=>{schedule();setTimeout(schedule,120);setTimeout(schedule,450);});
  shell.querySelectorAll('img').forEach(img=>{if(!img.complete)img.addEventListener('load',schedule,{once:true});});
- new MutationObserver(schedule).observe(shell,{childList:true,subtree:true});
- fit();
+ fit();schedule();
 })();
 </script>
 </body></html>
