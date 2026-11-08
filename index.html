@@ -448,7 +448,15 @@ function tkMixBus(name,destination){
  .shell .studio-sequencer-row>.padseq{height:auto!important;max-height:none!important}
  .shell .studio-sequencer-row>.seq #seqRows,.shell #bassGrid{overflow-x:auto}
  .shell .studio-sequencer-row>.seq .seqgrid{min-width:470px;overflow:visible}
- .shell #padChordsGrid.padchords{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+ .shell .studio-sequencer-row>.bassbox{grid-template-columns:minmax(0,1fr)!important}
+ .shell .studio-sequencer-row .bassbox>.basscontrols:nth-child(n){
+  grid-column:1!important;width:100%!important;min-width:0!important;flex-wrap:wrap!important}
+ .shell .studio-sequencer-row .bassbox>.basscontrols:nth-child(3){grid-row:3!important}
+ .shell .studio-sequencer-row .bassbox>#bassGrid{
+  display:block!important;width:100%!important;min-width:0!important;max-width:100%!important;overflow-x:auto!important}
+ .shell .studio-sequencer-row .bassbox #bassGrid .bassgrid{
+  width:100%!important;min-width:765px!important;grid-template-columns:repeat(16,minmax(45px,1fr))!important;overflow:visible!important}
+ .shell #padSection #padChordsGrid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
  .shell #padChordsGrid .padchord{min-height:56px!important}
  .shell #padChordsGrid .padchord strong{font-size:11px!important}
 }
