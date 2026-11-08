@@ -2309,7 +2309,15 @@ const introPhrasePatterns={
 // No manual genre selector. All original pop/jazz modules are left unchanged.
 let ambientAutoActive=false,ambientAutoBus=null,ambientAutoMusicBus=null,ambientAutoFX=null,ambientAutoCycle=-1;
 let ambientAutoSeed=0,ambientAutoVoice=0,ambientAutoNextBeatBreak=40,ambientAutoBeatBreakStart=-1;
-const ambientAutoChords=[[0,3,7],[5,8,12],[3,7,10],[7,10,14]];
+const ambientAutoSongs=[
+ {chords:[[0,3,7],[5,8,12],[3,7,10],[7,10,14]], piano:[[4,1],[10,2],[14,0]], pianoIntro:false},
+ {chords:[[0,3,7],[8,12,15],[3,7,10],[10,14,17]], piano:[[0,0],[7,2],[12,1]], pianoIntro:true},
+ {chords:[[0,4,7],[9,12,16],[5,9,12],[7,11,14]], piano:[[2,2],[8,1],[13,0]], pianoIntro:false},
+ {chords:[[0,3,7],[10,14,17],[5,8,12],[8,12,15]], piano:[[0,2],[6,0],[11,1],[15,2]], pianoIntro:true}
+];
+let ambientAutoSongIndex=-1;
+const ambientAutoSong=()=>ambientAutoSongs[Math.max(0,ambientAutoSongIndex)];
+const ambientAutoChord=local=>ambientAutoSong().chords[Math.floor(local/4)%4];
 const ambientAutoHz=m=>440*Math.pow(2,(m-69)/12);
 const ambientAutoPreviousChoose=bandChooseModel;
 bandChooseModel=function(){
@@ -2318,6 +2326,10 @@ bandChooseModel=function(){
  ambientAutoActive=Math.random()<.20;
  if(!ambientAutoActive&&+$ ('bpm').value===120&&ambientAutoCycle>=0)$('bpm').value=String(ambientAutoCycle);
  if(ambientAutoActive){
+  const songCount=ambientAutoSongs.length;
+  ambientAutoSongIndex=ambientAutoSongIndex<0
+   ? Math.floor(Math.random()*songCount)
+   : (ambientAutoSongIndex+1+Math.floor(Math.random()*(songCount-1)))%songCount;
   ambientAutoSeed=Math.floor(Math.random()*4);ambientAutoVoice=Math.floor(Math.random()*3);
   ambientAutoNextBeatBreak=40;
   const intro=8,verse=16,chorus=16,bridge=8;
@@ -2498,8 +2510,8 @@ function ambientAutoStep(step,when){
  if(!ambientAutoActive)return;
  if(!ambientAutoBus)ambientAutoInit();
  const section=songPosition(bar),local=section.local;
- const chordIndex=Math.floor(local/4)%4;
- const chord=ambientAutoChords[(ambientAutoSeed+chordIndex)%4];
+ const song=ambientAutoSong();
+ const chord=ambientAutoChord(local);
  const notes=chord.map(n=>43+n+12);
  const intro=section.name==='INTRO',outro=section.name==='OUTRO',bridge=section.name==='BRIDGE',chorus=section.name==='REFREIN';
   // v6.4.33: forward-moving 16-step trance grooves, phrased with the song.
@@ -2509,7 +2521,7 @@ function ambientAutoStep(step,when){
   const fullChorus=chorus && local>=2;
   const phrase=Math.floor(local/4);
  if(pos===0){
-  if(local%4===0){
+  if(local%4===0&&!(intro&&song.pianoIntro&&local<4)){
    if(ambientAutoVoice===0)ambientAutoDream(when,notes);
    else if(ambientAutoVoice===1)ambientAutoSciFi(when,notes);
    else ambientAutoShimmer(when,notes);
@@ -2520,10 +2532,10 @@ function ambientAutoStep(step,when){
   if(local===ambientAutoNextBeatBreak+4)ambientAutoNextBeatBreak+=32;
  }
  if(!intro&&!outro)ambientAutoBassStep(when,bar,pos,local,43+chord[0]-12,section.name);
- // Repeated, harmonically stable piano motifs with spaces between phrases.
- if(!intro&&!outro&&[4,10,14].includes(pos)&&local%4!==3){
-  const degrees=[0,7,3,7],n=notes[(Math.floor(local/2)+Math.floor(pos/4))%3]+12;
-  if((local+pos)%5!==0)ambientAutoPiano(when,n,.55);
+ const pianoHit=song.piano.find(hit=>hit[0]===pos);
+ if(!outro&&(!intro||song.pianoIntro)&&pianoHit&&local%4!==3){
+  const degree=(pianoHit[1]+Math.floor(local/2))%3;
+  ambientAutoPiano(when,notes[degree]+12,intro?.45:.55);
  }
  if(!intro&&!outro&&local%4===2&&pos===12)ambientAutoVoicePlay(notes[1]+12,when,2.2,[[1,1,'sine',0],[2.005,.09,'sine',0],[3.01,.025,'sine',0]],.014,.045,1.3,2400);
   // Persistent pulse, changing hat/shaker syncopation every four bars.
@@ -3393,7 +3405,7 @@ let tkLabBassLabel=()=>null;
  let lamp=null, lampTimer=null, pending=[];
  function info(bar){
   const sec=songPosition(bar),local=sec.local;
-  const chord=ambientAutoChords[(ambientAutoSeed+Math.floor(local/4)%4)%4];
+  const chord=ambientAutoChord(local);
   const grooveIndex=(ambientAutoSeed+Math.floor(Math.floor(local/4)/2)+(sec.name==='REFREIN'?1:0))%ambientBassGrooves.length;
   return {sec,local,chord,groove:ambientBassGrooves[grooveIndex],variation:(Math.floor(local/4)+ambientAutoSeed)%4};
  }
@@ -3433,7 +3445,7 @@ let tkLabBassLabel=()=>null;
    const root=55+v.chord[0];
    const note=cell.querySelector('.padchord-name'),quality=cell.querySelector('.padchord-quality');
    if(note)note.textContent=pitch(root);
-   if(quality)quality.textContent='MINEUR';
+   if(quality)quality.textContent=v.chord[1]-v.chord[0]===4?'MAJEUR':'MINEUR';
    cell.classList.toggle('playing',b===bar);
   });
  }
@@ -3809,7 +3821,8 @@ function frame(now){const dt=last?Math.min((now-last)/1000,.05):0;last=now;
   filter.frequency.setValueAtTime(Math.max(75,cutoff*.55),now);
   filter.frequency.exponentialRampToValueAtTime(cutoff*(type==='acid'?2.4:1.7),now+.025);
   filter.frequency.exponentialRampToValueAtTime(Math.max(85,cutoff*.65),now+Math.min(.42,d*.65));
-  filter.connect(amp);amp.connect(bassGain);
+  const endFade=life.own(ctx.createGain());
+  filter.connect(amp);amp.connect(endFade);endFade.connect(bassGain);
   const oscs=[];
   function add(wave,ratio,gain,detune=0){
    const osc=life.own(ctx.createOscillator()),g=life.own(ctx.createGain());
@@ -3833,6 +3846,8 @@ function frame(now){const dt=last?Math.min((now-last)/1000,.05):0;last=now;
   const releaseAt=now+Math.max(.055,d-release);
   amp.gain.setTargetAtTime(.00001,releaseAt,release/5);
   const stopAt=now+d+.22;
+  endFade.gain.setValueAtTime(1,stopAt-.02);
+  endFade.gain.linearRampToValueAtTime(0,stopAt);
   for(const [o] of oscs){o.stop(stopAt)}
   // The existing bass echo bus is used, so no separate permanent delay feedback is created.
  }
