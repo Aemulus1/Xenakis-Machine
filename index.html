@@ -3277,18 +3277,24 @@ function tkApprovedBass(midi,accent,duration){
 <script id="tk-bass-actual-sound-indicator">
 /* Alleen de naam tonen van de werkelijk gekozen bas: WAV finger/pick in AUTO,
    anders de synthbas die de bestaande bassSound-select bepaalt. */
+let tkLabBassLabel=()=>null;
 (function(){
  const output=document.getElementById('tkBassPlayingName');
  const select=document.getElementById('bassSound');
  if(!output||!select)return;
  function refresh(){
   let name=select.options[select.selectedIndex]?.textContent||'Bass Guitar';
-  try{
-   if(typeof machineMode!=='undefined' && machineMode==='auto' &&
-      document.getElementById('v64Bass')?.checked && typeof v64BassStyle!=='undefined'){
-    name=v64BassStyle==='basspick'?'Bass Guitar · Picked':'Bass Guitar · Fingerstyle';
+  if(typeof machineMode!=='undefined'&&machineMode==='auto'){
+   if(typeof ambientAutoActive!=='undefined'&&ambientAutoActive){
+    name='Ambient · synthbas';
+   }else{
+    const labName=tkLabBassLabel();
+    if(labName)name=labName;
+    else if(document.getElementById('v64Bass')?.checked&&typeof v64BassStyle!=='undefined'){
+     name=v64BassStyle==='basspick'?'Bass Guitar · Picked':'Bass Guitar · Fingerstyle';
+    }
    }
-  }catch(e){}
+  }
   if(output.textContent!==name)output.textContent=name;
  }
  refresh();
@@ -3840,13 +3846,10 @@ function frame(now){const dt=last?Math.min((now-last)/1000,.05):0;last=now;
   if(newNames[chosen])return labBass(midi,accent,duration,chosen);
   return originalBass(midi,accent,duration);
  };
- // Show the actual playing bass, including automatic WAV/synth song selection.
- const indicator=document.getElementById('tkBassPlayingName');
- if(indicator){setInterval(()=>{
-  const auto=currentAutoLab();if(!auto)return;
-  const name=newNames[auto]+' · Lab 04';
-  if(indicator.textContent!==name)indicator.textContent=name;
- },300)}
+ tkLabBassLabel=function(){
+  const chosen=currentAutoLab()||document.getElementById('bassSound')?.value;
+  return newNames[chosen]?newNames[chosen]+' · Lab 04':null;
+ };
 })();
 </script><style id="tk-mixlab-style">
 #tkMixToggle{position:fixed;right:12px;bottom:10px;z-index:10050;background:#193e39;color:#e6fff6;border:1px solid #8ce8cb;border-radius:8px;padding:10px 15px;font-weight:800;box-shadow:0 3px 14px #0009}
