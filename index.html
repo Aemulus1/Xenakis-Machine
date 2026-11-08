@@ -1244,15 +1244,16 @@ function autoLeadSynth(midi,duration,kind){
  }else{
   g.gain.setTargetAtTime(.0001,t+Math.max(a+.07,d-.14),Math.max(.04,.095+p.tail/100*.45));
  }
+ const leadBus=tkMixBus("leads",filter);
  const pan=typeof ctx.createStereoPanner==='function'?life.own(ctx.createStereoPanner()):null;
  f.connect(g);
- if(pan){pan.pan.value=(Math.random()-.5)*p.chorus/100*.8;g.connect(pan);pan.connect(filter)}
- else g.connect(filter);
+ if(pan){pan.pan.value=(Math.random()-.5)*p.chorus/100*.8;g.connect(pan);pan.connect(leadBus)}
+ else g.connect(leadBus);
  // Per-note echo: no shared feedback bus or persistent oscillators.
  if(p.space>0){
   const delay=life.own(ctx.createDelay(.6)),wet=life.own(ctx.createGain());
   delay.delayTime.value=.24;wet.gain.value=p.space/100*.65;
-  (pan||g).connect(delay);delay.connect(wet);wet.connect(filter);
+  (pan||g).connect(delay);delay.connect(wet);wet.connect(leadBus);
   if(p.tail>0){const fb=life.own(ctx.createGain());fb.gain.value=Math.min(.62,.12+p.tail/100*.48);delay.connect(fb);fb.connect(delay)}
  }
  const specs=kind==='bell'?[[1,.75,'sine'],[2.76,.18*p.metal/100,'sine'],[5.41,.07*p.metal/100,'sine']]:[[1,.49,p.wave],[1,.42,p.wave],[2,.09,'sine']];
